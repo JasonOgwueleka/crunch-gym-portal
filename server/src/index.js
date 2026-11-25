@@ -44,7 +44,7 @@ app.use(
   session({
     store: new PgSession({
       pool,
-      schemaName: 'gym_v0',
+      schemaName: 'gym_v1',
       tableName: 'user_sessions',
       createTableIfMissing: false,
     }),

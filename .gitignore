@@ -16,3 +16,6 @@ server/uploads/*
 *.log
 .vscode/
 .idea/
+
+# Security tool output
+strix_runs/

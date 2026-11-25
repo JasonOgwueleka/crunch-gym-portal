@@ -28,9 +28,9 @@ async function currentUserPayload(userId) {
   const user = await one(
     `select u.*, ${ACTIVE_MEMBERSHIP_SQL('u')} as membership_active,
             ta.trainer_id as assigned_trainer_id, t.full_name as assigned_trainer_name
-       from gym_v0.users u
-       left join gym_v0.trainer_assignments ta on ta.member_id = u.id
-       left join gym_v0.users t on t.id = ta.trainer_id
+       from gym_v1.users u
+       left join gym_v1.trainer_assignments ta on ta.member_id = u.id
+       left join gym_v1.users t on t.id = ta.trainer_id
       where u.id = $1`,
     [userId],
   );
@@ -52,7 +52,7 @@ router.post('/register', async (req, res) => {
   }
   const hash = await bcrypt.hash(String(password), 10);
   const user = await one(
-    `insert into gym_v0.users (email, password_hash, full_name, phone, date_of_birth, role)
+    `insert into gym_v1.users (email, password_hash, full_name, phone, date_of_birth, role)
      values ($1, $2, $3, $4, $5, 'member') returning *`,
     [String(email).trim().toLowerCase(), hash, String(full_name).trim(), blankToNull(phone), blankToNull(date_of_birth)],
   );
@@ -68,7 +68,7 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   requireFields(req.body, ['email', 'password']);
-  const user = await one('select * from gym_v0.users where lower(email) = lower($1)', [String(req.body.email).trim()]);
+  const user = await one('select * from gym_v1.users where lower(email) = lower($1)', [String(req.body.email).trim()]);
   const ok = user && (await bcrypt.compare(String(req.body.password), user.password_hash));
   if (!ok) {
     await audit(req, 'auth.login_failed', 'user', user?.id ?? null, { email: req.body.email }, null);
@@ -76,7 +76,7 @@ router.post('/login', async (req, res) => {
   }
   if (!user.is_active) throw new HttpError(403, 'This account has been deactivated. Please contact the gym.');
   req.session.userId = user.id;
-  await query('update gym_v0.users set last_login_at = now() where id = $1', [user.id]);
+  await query('update gym_v1.users set last_login_at = now() where id = $1', [user.id]);
   await audit(req, 'auth.login', 'user', user.id, null, user);
   res.json({ user: await currentUserPayload(user.id) });
 });
@@ -99,7 +99,7 @@ router.put('/me', requireAuth, async (req, res) => {
   if (full_name !== undefined && !String(full_name).trim()) throw badRequest('Name cannot be empty');
   if (email !== undefined && !String(email).trim()) throw badRequest('Email cannot be empty');
   await query(
-    `update gym_v0.users set
+    `update gym_v1.users set
         full_name = coalesce($2, full_name),
         email = coalesce($3, email),
         phone = $4,
@@ -120,16 +120,16 @@ router.put('/me', requireAuth, async (req, res) => {
 // Delete own account (requires password confirmation)
 router.delete('/me', requireAuth, async (req, res) => {
   requireFields(req.body, ['password']);
-  const user = await one('select * from gym_v0.users where id = $1', [req.user.id]);
+  const user = await one('select * from gym_v1.users where id = $1', [req.user.id]);
   if (!(await bcrypt.compare(String(req.body.password), user.password_hash))) {
     throw badRequest('Password is incorrect');
   }
   if (user.role === 'admin') {
-    const admins = await one(`select count(*)::int as n from gym_v0.users where role = 'admin' and is_active`);
+    const admins = await one(`select count(*)::int as n from gym_v1.users where role = 'admin' and is_active`);
     if (admins.n <= 1) throw badRequest('You are the last admin and cannot delete your account');
   }
   await audit(req, 'user.delete_self', 'user', user.id, { email: user.email });
-  await query('delete from gym_v0.users where id = $1', [user.id]);
+  await query('delete from gym_v1.users where id = $1', [user.id]);
   req.session.destroy(() => {
     res.clearCookie('crunch.sid');
     res.json({ ok: true });
@@ -138,7 +138,7 @@ router.delete('/me', requireAuth, async (req, res) => {
 
 router.post('/change-password', requireAuth, async (req, res) => {
   requireFields(req.body, ['current_password', 'new_password']);
-  const user = await one('select * from gym_v0.users where id = $1', [req.user.id]);
+  const user = await one('select * from gym_v1.users where id = $1', [req.user.id]);
   if (!(await bcrypt.compare(String(req.body.current_password), user.password_hash))) {
     throw badRequest('Current password is incorrect');
   }
@@ -146,18 +146,18 @@ router.post('/change-password', requireAuth, async (req, res) => {
     throw badRequest(`Password must be at least ${MIN_PASSWORD} characters`);
   }
   const hash = await bcrypt.hash(String(req.body.new_password), 10);
-  await query('update gym_v0.users set password_hash = $2 where id = $1', [user.id, hash]);
+  await query('update gym_v1.users set password_hash = $2 where id = $1', [user.id, hash]);
   await audit(req, 'auth.change_password', 'user', user.id);
   res.json({ ok: true });
 });
 
 router.post('/forgot-password', async (req, res) => {
   requireFields(req.body, ['email']);
-  const user = await one('select * from gym_v0.users where lower(email) = lower($1) and is_active', [String(req.body.email).trim()]);
+  const user = await one('select * from gym_v1.users where lower(email) = lower($1) and is_active', [String(req.body.email).trim()]);
   if (user) {
     const token = crypto.randomBytes(32).toString('hex');
     await query(
-      `insert into gym_v0.password_reset_tokens (user_id, token, expires_at)
+      `insert into gym_v1.password_reset_tokens (user_id, token, expires_at)
        values ($1, $2, now() + interval '1 hour')`,
       [user.id, token],
     );
@@ -179,17 +179,17 @@ router.post('/reset-password', async (req, res) => {
   const hash = await bcrypt.hash(String(req.body.password), 10);
   const userId = await withTransaction(async (db) => {
     const { rows } = await db.query(
-      `select * from gym_v0.password_reset_tokens
+      `select * from gym_v1.password_reset_tokens
         where token = $1 and used_at is null and expires_at > now() for update`,
       [String(req.body.token)],
     );
     const t = rows[0];
     if (!t) throw badRequest('This reset link is invalid or has expired');
-    await db.query('update gym_v0.users set password_hash = $2 where id = $1', [t.user_id, hash]);
-    await db.query('update gym_v0.password_reset_tokens set used_at = now() where id = $1', [t.id]);
+    await db.query('update gym_v1.users set password_hash = $2 where id = $1', [t.user_id, hash]);
+    await db.query('update gym_v1.password_reset_tokens set used_at = now() where id = $1', [t.id]);
     return t.user_id;
   });
-  const user = await one('select * from gym_v0.users where id = $1', [userId]);
+  const user = await one('select * from gym_v1.users where id = $1', [userId]);
   await audit(req, 'auth.password_reset', 'user', userId, null, user);
   res.json({ ok: true });
 });

@@ -18,12 +18,12 @@ router.get('/', async (req, res) => {
   const { rows } = await query(
     `select u.id, u.full_name, u.email, u.phone, ta.assigned_at, ta.notes as assignment_notes,
             ${ACTIVE_MEMBERSHIP_SQL('u')} as membership_active,
-            (select max(log_date) from gym_v0.progress_logs pl where pl.member_id = u.id) as last_progress_on,
-            (select min(start_at) from gym_v0.pt_sessions s
+            (select max(log_date) from gym_v1.progress_logs pl where pl.member_id = u.id) as last_progress_on,
+            (select min(start_at) from gym_v1.pt_sessions s
               where s.member_id = u.id and s.status = 'booked' and s.start_at > now()) as next_session_at,
-            exists (select 1 from gym_v0.health_questionnaires h where h.member_id = u.id) as has_questionnaire
-       from gym_v0.users u
-       ${req.user.role === 'trainer' ? 'join' : 'left join'} gym_v0.trainer_assignments ta on ta.member_id = u.id
+            exists (select 1 from gym_v1.health_questionnaires h where h.member_id = u.id) as has_questionnaire
+       from gym_v1.users u
+       ${req.user.role === 'trainer' ? 'join' : 'left join'} gym_v1.trainer_assignments ta on ta.member_id = u.id
       where ${where}
       order by u.full_name`,
     params,
@@ -38,18 +38,18 @@ router.get('/:memberId', async (req, res) => {
     `select u.id, u.full_name, u.email, u.phone, u.date_of_birth, u.created_at,
             ${ACTIVE_MEMBERSHIP_SQL('u')} as membership_active,
             ta.assigned_at, ta.notes as assignment_notes
-       from gym_v0.users u left join gym_v0.trainer_assignments ta on ta.member_id = u.id
+       from gym_v1.users u left join gym_v1.trainer_assignments ta on ta.member_id = u.id
       where u.id = $1 and u.role = 'member'`,
     [memberId],
   );
   if (!member) throw notFound('Member not found');
   const [health, logs, photos, plans, notes, sessions] = await Promise.all([
-    one('select * from gym_v0.health_questionnaires where member_id = $1', [memberId]),
-    query('select * from gym_v0.progress_logs where member_id = $1 order by log_date desc', [memberId]),
-    query('select id, caption, taken_on, original_name, created_at from gym_v0.progress_photos where member_id = $1 order by taken_on desc', [memberId]),
-    query('select * from gym_v0.workout_plans where member_id = $1 order by created_at desc', [memberId]),
-    query('select * from gym_v0.session_notes where member_id = $1 order by created_at desc', [memberId]),
-    query('select * from gym_v0.pt_sessions where member_id = $1 order by start_at desc', [memberId]),
+    one('select * from gym_v1.health_questionnaires where member_id = $1', [memberId]),
+    query('select * from gym_v1.progress_logs where member_id = $1 order by log_date desc', [memberId]),
+    query('select id, caption, taken_on, original_name, created_at from gym_v1.progress_photos where member_id = $1 order by taken_on desc', [memberId]),
+    query('select * from gym_v1.workout_plans where member_id = $1 order by created_at desc', [memberId]),
+    query('select * from gym_v1.session_notes where member_id = $1 order by created_at desc', [memberId]),
+    query('select * from gym_v1.pt_sessions where member_id = $1 order by start_at desc', [memberId]),
   ]);
   res.json({
     member,

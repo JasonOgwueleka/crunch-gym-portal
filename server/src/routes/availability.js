@@ -10,10 +10,10 @@ const router = Router();
 const SELECT = `
   select a.*, t.full_name as trainer_name,
          s.id as session_id, s.status as session_status, s.member_id, m.full_name as member_name
-    from gym_v0.trainer_availability a
-    join gym_v0.users t on t.id = a.trainer_id
-    left join gym_v0.pt_sessions s on s.availability_id = a.id and s.status in ('booked', 'completed')
-    left join gym_v0.users m on m.id = s.member_id`;
+    from gym_v1.trainer_availability a
+    join gym_v1.users t on t.id = a.trainer_id
+    left join gym_v1.pt_sessions s on s.availability_id = a.id and s.status in ('booked', 'completed')
+    left join gym_v1.users m on m.id = s.member_id`;
 
 /**
  * Trainer: own slots (past week onwards).
@@ -53,7 +53,7 @@ router.get('/', requireAuth, async (req, res) => {
 
 async function assertNoOverlap(trainerId, startAt, endAt, excludeId = null) {
   const clash = await one(
-    `select id from gym_v0.trainer_availability
+    `select id from gym_v1.trainer_availability
       where trainer_id = $1 and id <> coalesce($4, -1)
         and tstzrange(start_at, end_at) && tstzrange($2::timestamptz, $3::timestamptz)`,
     [trainerId, startAt, endAt, excludeId],
@@ -67,7 +67,7 @@ router.post('/', requireRole('trainer', 'admin'), async (req, res) => {
   if (new Date(req.body.end_at) <= new Date(req.body.start_at)) throw badRequest('End time must be after start time');
   await assertNoOverlap(trainerId, req.body.start_at, req.body.end_at);
   const slot = await one(
-    `insert into gym_v0.trainer_availability (trainer_id, start_at, end_at, notes)
+    `insert into gym_v1.trainer_availability (trainer_id, start_at, end_at, notes)
      values ($1, $2, $3, $4) returning *`,
     [trainerId, req.body.start_at, req.body.end_at, req.body.notes || null],
   );
@@ -94,7 +94,7 @@ router.put('/:id', requireRole('trainer', 'admin'), async (req, res) => {
   if (new Date(endAt) <= new Date(startAt)) throw badRequest('End time must be after start time');
   await assertNoOverlap(slot.trainer_id, startAt, endAt, slot.id);
   const updated = await one(
-    `update gym_v0.trainer_availability set start_at = $2, end_at = $3, notes = $4 where id = $1 returning *`,
+    `update gym_v1.trainer_availability set start_at = $2, end_at = $3, notes = $4 where id = $1 returning *`,
     [slot.id, startAt, endAt, req.body.notes === undefined ? slot.notes : req.body.notes || null],
   );
   await audit(req, 'availability.update', 'trainer_availability', slot.id, req.body);
@@ -106,7 +106,7 @@ router.delete('/:id', requireRole('trainer', 'admin'), async (req, res) => {
   if (slot.session_id && slot.session_status === 'booked') {
     throw conflict('This slot is booked. Cancel the session before deleting it.');
   }
-  await query('delete from gym_v0.trainer_availability where id = $1', [slot.id]);
+  await query('delete from gym_v1.trainer_availability where id = $1', [slot.id]);
   await audit(req, 'availability.delete', 'trainer_availability', slot.id);
   res.json({ ok: true });
 });

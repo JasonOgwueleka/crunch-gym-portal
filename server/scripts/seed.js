@@ -1,9 +1,9 @@
 /**
- * Seed the gym_v0 schema with synthetic data and one test account per role.
+ * Seed the gym_v1 schema with synthetic data and one test account per role.
  *
  *   npm run db:seed
  *
- * WARNING: this TRUNCATES every table in gym_v0 (and clears the upload folders)
+ * WARNING: this TRUNCATES every table in gym_v1 (and clears the upload folders)
  * before inserting fresh data. It never touches any other schema.
  */
 import fs from 'node:fs';
@@ -173,7 +173,7 @@ async function insertMany(db, table, rows, returning = 'id') {
       return `(${ph.join(', ')})`;
     });
     const { rows: inserted } = await db.query(
-      `insert into gym_v0.${table} (${cols.join(', ')}) values ${tuples.join(', ')} returning ${returning}`,
+      `insert into gym_v1.${table} (${cols.join(', ')}) values ${tuples.join(', ')} returning ${returning}`,
       values,
     );
     out.push(...inserted);
@@ -183,7 +183,7 @@ async function insertMany(db, table, rows, returning = 'id') {
 
 // ---------------------------------------------------------------------------
 async function main() {
-  console.log('Seeding gym_v0 ...');
+  console.log('Seeding gym_v1 ...');
   const syntheticHash = await bcrypt.hash(SYNTHETIC_PASSWORD, 10);
   const testHashes = await Promise.all(TEST_ACCOUNTS.map((a) => bcrypt.hash(a.password, 10)));
 
@@ -191,11 +191,11 @@ async function main() {
 
   await withTransaction(async (db) => {
     const { rows: tables } = await db.query(
-      `select tablename from pg_tables where schemaname = 'gym_v0'`,
+      `select tablename from pg_tables where schemaname = 'gym_v1'`,
     );
-    if (!tables.length) throw new Error('No tables found in gym_v0. Run database/migrations/001_create_schema.sql first.');
+    if (!tables.length) throw new Error('No tables found in gym_v1. Run database/migrations/001_create_schema.sql first.');
     await db.query(
-      `truncate ${tables.map((t) => `gym_v0.${t.tablename}`).join(', ')} restart identity cascade`,
+      `truncate ${tables.map((t) => `gym_v1.${t.tablename}`).join(', ')} restart identity cascade`,
     );
 
     // ---- Users ----------------------------------------------------------
@@ -330,8 +330,8 @@ async function main() {
     if (cancelledIdx >= 0) {
       const pay = payments[cancelledIdx];
       await insertMany(db, 'refunds', [{ payment_id: pay.id, amount_cents: pay.amount_cents, reason: 'Moved abroad - cancelled within cooling-off period', issued_by: admin.id, created_at: daysFromToday(-1) }]);
-      await db.query(`update gym_v0.payments set status = 'refunded' where id = $1`, [pay.id]);
-      await db.query(`update gym_v0.memberships set status = 'refunded' where id = $1`, [memberships[cancelledIdx].id]);
+      await db.query(`update gym_v1.payments set status = 'refunded' where id = $1`, [pay.id]);
+      await db.query(`update gym_v1.memberships set status = 'refunded' where id = $1`, [memberships[cancelledIdx].id]);
     }
 
     // ---- Trainer assignments ---------------------------------------------
@@ -564,7 +564,7 @@ async function main() {
 
     // ---- Audit log ----------------------------------------------------------
     await insertMany(db, 'audit_logs', [
-      { actor_id: null, actor_email: 'seed-script', actor_role: null, action: 'seed.run', entity_type: 'database', entity_id: 'gym_v0', details: JSON.stringify({ users: users.length, classes: classes.length }), ip_address: null },
+      { actor_id: null, actor_email: 'seed-script', actor_role: null, action: 'seed.run', entity_type: 'database', entity_id: 'gym_v1', details: JSON.stringify({ users: users.length, classes: classes.length }), ip_address: null },
       { actor_id: admin.id, actor_email: admin.email, actor_role: 'admin', action: 'certification.approved', entity_type: 'certification', entity_id: '1', details: JSON.stringify({ review_notes: 'Verified with issuer' }), ip_address: '127.0.0.1' },
     ]);
 

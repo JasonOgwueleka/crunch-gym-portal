@@ -3,14 +3,14 @@ import { forbidden } from './http.js';
 
 /** SQL expression: does user `alias`.id have an active membership today? */
 export const ACTIVE_MEMBERSHIP_SQL = (alias = 'u') => `exists (
-  select 1 from gym_v0.memberships am
+  select 1 from gym_v1.memberships am
    where am.user_id = ${alias}.id
      and am.status = 'active'
      and current_date between am.start_date and am.end_date)`;
 
 export async function hasActiveMembership(userId, db = null) {
   const sql = `select exists (
-      select 1 from gym_v0.memberships
+      select 1 from gym_v1.memberships
        where user_id = $1 and status = 'active'
          and current_date between start_date and end_date) as active`;
   const row = db ? (await db.query(sql, [userId])).rows[0] : await one(sql, [userId]);
@@ -18,13 +18,13 @@ export async function hasActiveMembership(userId, db = null) {
 }
 
 export async function getAssignedTrainerId(memberId) {
-  const row = await one('select trainer_id from gym_v0.trainer_assignments where member_id = $1', [memberId]);
+  const row = await one('select trainer_id from gym_v1.trainer_assignments where member_id = $1', [memberId]);
   return row?.trainer_id ?? null;
 }
 
 export async function isAssigned(trainerId, memberId) {
   const row = await one(
-    'select 1 from gym_v0.trainer_assignments where trainer_id = $1 and member_id = $2',
+    'select 1 from gym_v1.trainer_assignments where trainer_id = $1 and member_id = $2',
     [trainerId, memberId],
   );
   return Boolean(row);

@@ -31,6 +31,8 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET || 'crunch-gym-dev-secret',
   port: Number(process.env.PORT || 4000),
   appUrl: process.env.APP_URL || 'http://localhost:5173',
-  uploadDir: path.resolve(SERVER_ROOT, process.env.UPLOAD_DIR || './uploads'),
+  // Each version keeps its own upload folder (uploads/gym_v1) so seeding one
+  // version never deletes the files another version's database points to.
+  uploadDir: path.resolve(SERVER_ROOT, process.env.UPLOAD_DIR || './uploads', 'gym_v1'),
   sessionMaxAgeMs: 1000 * 60 * 60 * 8, // 8 hours
 };

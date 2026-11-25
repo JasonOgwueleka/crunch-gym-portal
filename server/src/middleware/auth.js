@@ -7,7 +7,7 @@ export async function loadUser(req, res, next) {
   if (userId) {
     const user = await one(
       `select id, email, full_name, phone, date_of_birth, role, is_active, created_at
-         from gym_v0.users where id = $1`,
+         from gym_v1.users where id = $1`,
       [userId],
     );
     if (user && user.is_active) {

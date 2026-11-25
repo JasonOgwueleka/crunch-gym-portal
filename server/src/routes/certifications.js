@@ -13,9 +13,9 @@ const SELECT = `
   select c.id, c.trainer_id, c.title, c.issuer, c.issued_on, c.expires_on, c.original_name, c.mime_type,
          c.size_bytes, c.status, c.review_notes, c.reviewed_by, c.reviewed_at, c.created_at, c.updated_at,
          t.full_name as trainer_name, r.full_name as reviewed_by_name
-    from gym_v0.certifications c
-    join gym_v0.users t on t.id = c.trainer_id
-    left join gym_v0.users r on r.id = c.reviewed_by`;
+    from gym_v1.certifications c
+    join gym_v1.users t on t.id = c.trainer_id
+    left join gym_v1.users r on r.id = c.reviewed_by`;
 
 router.get('/', requireRole('trainer', 'admin'), async (req, res) => {
   let rows;
@@ -32,7 +32,7 @@ router.get('/', requireRole('trainer', 'admin'), async (req, res) => {
 });
 
 async function loadCert(req) {
-  const cert = await one('select * from gym_v0.certifications where id = $1', [toInt(req.params.id)]);
+  const cert = await one('select * from gym_v1.certifications where id = $1', [toInt(req.params.id)]);
   if (!cert) throw notFound('Certification not found');
   if (req.user.role === 'trainer' && cert.trainer_id !== req.user.id) throw forbidden();
   return cert;
@@ -54,7 +54,7 @@ router.post('/', requireRole('trainer'), upload.single('document'), async (req, 
   if (!req.file) throw badRequest('Attach the certificate document');
   const b = req.body;
   const cert = await one(
-    `insert into gym_v0.certifications
+    `insert into gym_v1.certifications
        (trainer_id, title, issuer, issued_on, expires_on, stored_name, original_name, mime_type, size_bytes)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
     [req.user.id, b.title, blankToNull(b.issuer), blankToNull(b.issued_on), blankToNull(b.expires_on),
@@ -71,7 +71,7 @@ router.put('/:id', requireRole('trainer', 'admin'), upload.single('document'), a
   const newFile = req.file;
   const resetReview = req.user.role === 'trainer';
   await query(
-    `update gym_v0.certifications set
+    `update gym_v1.certifications set
         title = coalesce($2, title),
         issuer = $3,
         issued_on = $4,
@@ -105,7 +105,7 @@ router.put('/:id', requireRole('trainer', 'admin'), upload.single('document'), a
 
 router.delete('/:id', requireRole('trainer', 'admin'), async (req, res) => {
   const cert = await loadCert(req);
-  await query('delete from gym_v0.certifications where id = $1', [cert.id]);
+  await query('delete from gym_v1.certifications where id = $1', [cert.id]);
   removeStoredFile(UPLOAD_SUBDIRS.certifications, cert.stored_name);
   await audit(req, 'certification.delete', 'certification', cert.id, { title: cert.title });
   res.json({ ok: true });
@@ -117,10 +117,10 @@ router.patch('/:id/review', requireRole('admin'), async (req, res) => {
   const status = req.body?.status;
   if (!['approved', 'rejected', 'pending'].includes(status)) throw badRequest('Status must be approved, rejected or pending');
   await query(
-    `update gym_v0.certifications set status = $2, review_notes = $3, reviewed_by = $4, reviewed_at = now() where id = $1`,
+    `update gym_v1.certifications set status = $2, review_notes = $3, reviewed_by = $4, reviewed_at = now() where id = $1`,
     [cert.id, status, blankToNull(req.body.review_notes), req.user.id],
   );
-  const trainer = await one('select email, full_name from gym_v0.users where id = $1', [cert.trainer_id]);
+  const trainer = await one('select email, full_name from gym_v1.users where id = $1', [cert.trainer_id]);
   if (trainer && status !== 'pending') {
     sendEmail({
       to: trainer.email,

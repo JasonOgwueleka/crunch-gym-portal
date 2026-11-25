@@ -10,9 +10,9 @@ const STATUSES = ['booked', 'cancelled', 'completed', 'no_show'];
 
 const SELECT = `
   select s.*, t.full_name as trainer_name, m.full_name as member_name, m.email as member_email
-    from gym_v0.pt_sessions s
-    join gym_v0.users t on t.id = s.trainer_id
-    join gym_v0.users m on m.id = s.member_id`;
+    from gym_v1.pt_sessions s
+    join gym_v1.users t on t.id = s.trainer_id
+    join gym_v1.users m on m.id = s.member_id`;
 
 router.get('/', requireAuth, async (req, res) => {
   const { role, id } = req.user;
@@ -52,19 +52,19 @@ router.post('/', requireRole('member'), async (req, res) => {
 
   const session = await withTransaction(async (db) => {
     const { rows } = await db.query(
-      'select * from gym_v0.trainer_availability where id = $1 for update',
+      'select * from gym_v1.trainer_availability where id = $1 for update',
       [toInt(req.body.availability_id, 'availability_id')],
     );
     const slot = rows[0];
     if (!slot || slot.trainer_id !== trainerId) throw notFound('That slot is not available');
     if (new Date(slot.start_at) <= new Date()) throw badRequest('That slot is in the past');
     const { rows: taken } = await db.query(
-      `select 1 from gym_v0.pt_sessions where availability_id = $1 and status in ('booked', 'completed')`,
+      `select 1 from gym_v1.pt_sessions where availability_id = $1 and status in ('booked', 'completed')`,
       [slot.id],
     );
     if (taken.length) throw conflict('That slot has just been booked by someone else');
     const { rows: [s] } = await db.query(
-      `insert into gym_v0.pt_sessions (trainer_id, member_id, availability_id, start_at, end_at, member_notes)
+      `insert into gym_v1.pt_sessions (trainer_id, member_id, availability_id, start_at, end_at, member_notes)
        values ($1, $2, $3, $4, $5, $6) returning *`,
       [trainerId, req.user.id, slot.id, slot.start_at, slot.end_at, req.body.member_notes || null],
     );
@@ -79,7 +79,7 @@ router.post('/admin', requireRole('admin'), async (req, res) => {
   requireFields(req.body, ['trainer_id', 'member_id', 'start_at', 'end_at']);
   const b = req.body;
   const s = await one(
-    `insert into gym_v0.pt_sessions (trainer_id, member_id, start_at, end_at, status, member_notes)
+    `insert into gym_v1.pt_sessions (trainer_id, member_id, start_at, end_at, status, member_notes)
      values ($1, $2, $3, $4, coalesce($5, 'booked'), $6) returning *`,
     [b.trainer_id, b.member_id, b.start_at, b.end_at, b.status || null, b.member_notes || null],
   );
@@ -100,11 +100,11 @@ router.put('/:id', requireAuth, async (req, res) => {
   let updated;
   if (role === 'member') {
     if (s.status !== 'booked') throw badRequest('Only upcoming sessions can be changed');
-    updated = await one('update gym_v0.pt_sessions set member_notes = $2 where id = $1 returning *', [s.id, b.member_notes || null]);
+    updated = await one('update gym_v1.pt_sessions set member_notes = $2 where id = $1 returning *', [s.id, b.member_notes || null]);
   } else {
     if (b.status && !STATUSES.includes(b.status)) throw badRequest('Invalid status');
     updated = await one(
-      `update gym_v0.pt_sessions set
+      `update gym_v1.pt_sessions set
           status = coalesce($2, status),
           member_notes = case when $5 then $3 else member_notes end,
           start_at = coalesce($4::timestamptz, start_at),
@@ -127,14 +127,14 @@ router.put('/:id', requireAuth, async (req, res) => {
 router.post('/:id/cancel', requireAuth, async (req, res) => {
   const s = await loadSession(req);
   if (s.status !== 'booked') throw badRequest('Only booked sessions can be cancelled');
-  const updated = await one(`update gym_v0.pt_sessions set status = 'cancelled' where id = $1 returning *`, [s.id]);
+  const updated = await one(`update gym_v1.pt_sessions set status = 'cancelled' where id = $1 returning *`, [s.id]);
   await audit(req, 'pt_session.cancel', 'pt_session', s.id);
   res.json(updated);
 });
 
 router.delete('/:id', requireRole('trainer', 'admin'), async (req, res) => {
   const s = await loadSession(req);
-  await query('delete from gym_v0.pt_sessions where id = $1', [s.id]);
+  await query('delete from gym_v1.pt_sessions where id = $1', [s.id]);
   await audit(req, 'pt_session.delete', 'pt_session', s.id);
   res.json({ ok: true });
 });

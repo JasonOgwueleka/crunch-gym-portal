@@ -7,7 +7,7 @@ import { query } from '../db.js';
 export async function audit(req, action, entityType, entityId, details = null, actor = req?.user) {
   try {
     await query(
-      `insert into gym_v0.audit_logs
+      `insert into gym_v1.audit_logs
          (actor_id, actor_email, actor_role, action, entity_type, entity_id, details, ip_address)
        values ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [

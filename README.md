@@ -4,11 +4,11 @@ A web portal for a fictional gym, built for the DFCS H4013 Application Security 
 
 - **Frontend:** React 18 + Vite + React Router (`client/`)
 - **Backend:** Node.js + Express 5 REST API (`server/`)
-- **Database:** existing Supabase PostgreSQL, all tables in the **`gym_v0`** schema (`database/`)
-- **Auth:** email and password handled by Express (bcrypt hashes), sessions stored in Postgres (`gym_v0.user_sessions`). Supabase Auth is not used.
+- **Database:** existing Supabase PostgreSQL, all tables in the **`gym_v1`** schema (`database/`)
+- **Auth:** email and password handled by Express (bcrypt hashes), sessions stored in Postgres (`gym_v1.user_sessions`). Supabase Auth is not used.
 - **Payments:** simulated in the app. No payment provider is contacted.
 - **Email:** printed to the API server console (welcome, receipts, password resets, refunds, certification decisions).
-- **Uploads:** saved to `server/uploads/`, which is never served statically. Files are only returned through API routes that check permissions.
+- **Uploads:** saved to `server/uploads/gym_v1/` (one folder per version), which is never served statically. Files are only returned through API routes that check permissions.
 
 > This is **v0**: the functional baseline built with ordinary practices *before* dedicated security
 > hardening. Hardening is planned for v1. See [Not yet hardened](#not-yet-hardened-v0-scope).
@@ -39,7 +39,7 @@ npm run install:all
 npm run db:migrate
 ```
 
-To start over, run `database/reset.sql` (drops **only** the `gym_v0` schema), then run the migration again.
+To start over, run `database/reset.sql` (drops **only** the `gym_v1` schema), then run the migration again.
 
 ### Load synthetic data
 
@@ -47,7 +47,7 @@ To start over, run `database/reset.sql` (drops **only** the `gym_v0` schema), th
 npm run db:seed
 ```
 
-The seed **truncates every table in `gym_v0`** and clears `server/uploads/`, then loads plans, about 30 users, memberships,
+The seed **truncates every table in `gym_v1`** and clears `server/uploads/gym_v1/`, then loads plans, about 30 users, memberships,
 payments (including failed ones and a refund), trainer assignments, availability, PT sessions, a three-week
 class timetable with bookings, workout plans, session notes, progress logs, placeholder progress photos and
 certificate PDFs, health questionnaires, messages, check-ins and audit entries. All of this data is synthetic.
@@ -100,8 +100,8 @@ e.g. `4242 4242 4242 4242`. Numbers ending in `0002` are **declined**, and numbe
 
 ```
 database/
-  migrations/001_create_schema.sql   all tables, indexes and triggers in schema gym_v0
-  reset.sql                          drops schema gym_v0 (dev only)
+  migrations/001_create_schema.sql   all tables, indexes and triggers in schema gym_v1
+  reset.sql                          drops schema gym_v1 (dev only)
 server/
   src/index.js                       Express app, session store and route mounting
   src/config.js  src/db.js           env loading and pg pool (SSL for Supabase)
