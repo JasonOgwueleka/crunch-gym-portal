@@ -1,0 +1,17 @@
+{
+  "name": "crunch-gym-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crunch Gym Portal - v0 functional baseline (React + Express + Postgres)",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "db:migrate": "npm run db:migrate --prefix server",
+    "db:seed": "npm run db:seed --prefix server",
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
