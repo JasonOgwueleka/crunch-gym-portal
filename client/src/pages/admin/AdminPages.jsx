@@ -425,6 +425,36 @@ export function AdminCheckins() {
 }
 
 // ---------------------------------------------------------------------------
+// SEC-12 (6): result of GET /api/admin/audit-logs/verify (hash-chain check).
+function AuditIntegrity() {
+  const check = useApi('/admin/audit-logs/verify');
+  const r = check.data;
+  return (
+    <Card
+      title="Audit log integrity"
+      actions={
+        <button type="button" className="btn btn-sm" onClick={check.reload} disabled={check.loading}>
+          {check.loading ? 'Checking…' : 'Re-check'}
+        </button>
+      }
+    >
+      <Alert>{check.error}</Alert>
+      {!r ? (
+        <Loading />
+      ) : r.intact ? (
+        <Alert kind="success">
+          Chain intact: all {r.checked_entries} entries match their SHA-256 hashes and links. Checked {dateTime(r.checked_at)}.
+        </Alert>
+      ) : (
+        <Alert>
+          Tampering detected at entry ID {r.first_broken_id} (sequence #{r.first_broken_seq}). {r.reason}. Checked{' '}
+          {r.checked_entries} of {r.total_entries} entries at {dateTime(r.checked_at)}.
+        </Alert>
+      )}
+    </Card>
+  );
+}
+
 export function AdminAudit() {
   const [filters, setFilters] = useState({ action: '', actor: '', from: '', to: '' });
   const [applied, setApplied] = useState(filters);
@@ -440,6 +470,7 @@ export function AdminAudit() {
         actions={<a className="btn" href="/api/admin/reports/audit-log.csv">Export CSV</a>}
       />
       <Alert>{error}</Alert>
+      <AuditIntegrity />
       <Card>
         <form
           className="filters"

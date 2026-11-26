@@ -3,12 +3,20 @@ import { query, one } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { notFound } from '../utils/http.js';
 import { audit } from '../utils/audit.js';
+import { verifyAuditChain } from '../utils/auditChain.js';
 import { toCsv } from '../utils/csv.js';
 import { ACTIVE_MEMBERSHIP_SQL } from '../utils/domain.js';
 
 /** Admin-only: audit log, dashboard summary and CSV reports. */
 const router = Router();
 router.use(requireRole('admin'));
+
+// SEC-12 (3): check the whole hash chain. Read-only (GET never changes data),
+// so the check itself is not written to the audit log.
+router.get('/audit-logs/verify', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await verifyAuditChain());
+});
 
 router.get('/audit-logs', async (req, res) => {
   const params = [];

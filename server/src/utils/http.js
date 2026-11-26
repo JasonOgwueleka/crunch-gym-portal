@@ -1,3 +1,5 @@
+import { audit } from './audit.js';
+
 export class HttpError extends Error {
   constructor(status, message, code) {
     super(message);
@@ -49,10 +51,25 @@ export function buildUpdate(body, allowed, startIndex = 1) {
 // eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, next) {
   if (err instanceof HttpError) {
+    // SEC-12 (1): record every "access denied". CSRF rejections are already
+    // logged (with more detail) by the CSRF middleware.
+    if (err.status === 403 && err.code !== 'CSRF_INVALID') {
+      void audit(req, 'security.access_denied', 'request', `${req.method} ${req.originalUrl}`, {
+        method: req.method,
+        path: req.originalUrl,
+        reason: err.message,
+      });
+    }
     return res.status(err.status).json(err.code ? { error: err.message, code: err.code } : { error: err.message });
   }
-  if (err?.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ error: 'File is too large' });
+  if (err?.name === 'MulterError') {
+    // SEC-12 (1): record rejected uploads (multer removes the partial file itself).
+    void audit(req, 'upload.rejected', 'request', `${req.method} ${req.originalUrl}`, {
+      path: req.originalUrl,
+      reason: err.code,
+      field: err.field ?? null,
+    });
+    return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File is too large' : 'The upload was rejected' });
   }
   switch (err?.code) {
     case '23505':

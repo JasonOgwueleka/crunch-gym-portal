@@ -22,6 +22,10 @@ const LOGIN_FAILED_MESSAGE = 'Incorrect email or password';
 // email has no account so the response takes the same time as a wrong password.
 const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
 
+// SEC-12 (5): only log the typed login identifier if it looks like an email
+// address, so a password typed into the email box never reaches the audit log.
+const loggableEmail = (key) => (/^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/.test(key) ? key : '[not an email address]');
+
 function lockedError(lockedUntil) {
   const mins = minutesLeft(lockedUntil);
   return new HttpError(
@@ -93,7 +97,7 @@ router.post('/login', authRateLimit('login'), async (req, res) => {
   // before the user lookup so locked real and made-up emails behave the same.
   const activeLock = await getActiveLock(key);
   if (activeLock) {
-    await audit(req, 'auth.login_blocked_locked', 'login', key, { email: key, locked_until: activeLock }, null);
+    await audit(req, 'auth.login_blocked_locked', 'login', loggableEmail(key), { email: loggableEmail(key), locked_until: activeLock }, null);
     throw lockedError(activeLock);
   }
 
@@ -102,10 +106,10 @@ router.post('/login', authRateLimit('login'), async (req, res) => {
   const passwordOk = await bcrypt.compare(String(req.body.password), user ? user.password_hash : DUMMY_HASH);
   if (!user || !passwordOk) {
     const { failedCount, lockedUntil, justLocked } = await recordFailure(key);
-    await audit(req, 'auth.login_failed', 'user', user?.id ?? null, { email: key, failed_count: failedCount }, null);
+    await audit(req, 'auth.login_failed', 'user', user?.id ?? null, { email: loggableEmail(key), failed_count: failedCount }, null);
     if (justLocked) {
-      await audit(req, 'auth.account_locked', 'login', key, {
-        email: key,
+      await audit(req, 'auth.account_locked', 'login', loggableEmail(key), {
+        email: loggableEmail(key),
         locked_until: lockedUntil,
         after_failed_attempts: failedCount,
       }, null);
