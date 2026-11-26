@@ -35,4 +35,32 @@ export const config = {
   // version never deletes the files another version's database points to.
   uploadDir: path.resolve(SERVER_ROOT, process.env.UPLOAD_DIR || './uploads', 'gym_v1'),
   sessionMaxAgeMs: 1000 * 60 * 60 * 8, // 8 hours
+
+  // SEC-01: brute-force protection. Defaults match the requirement; the env
+  // variables only exist so testers can shorten the waits.
+  loginMaxAttempts: positiveInt('LOGIN_MAX_ATTEMPTS', 5),
+  loginWindowMinutes: positiveInt('LOGIN_WINDOW_MINUTES', 15),
+  loginLockoutMinutes: positiveInt('LOGIN_LOCKOUT_MINUTES', 15),
+  authRateLimitPerMinute: positiveInt('AUTH_RATE_LIMIT_PER_MINUTE', 10),
+  // Only trust X-Forwarded-For when the app really runs behind a reverse proxy.
+  // Off by default: otherwise any client could fake its IP and dodge the rate limit.
+  trustProxy: process.env.TRUST_PROXY ? parseTrustProxy(process.env.TRUST_PROXY) : false,
 };
+
+function positiveInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) {
+    console.error(`${name} must be a positive whole number (got "${raw}").`);
+    process.exit(1);
+  }
+  return n;
+}
+
+function parseTrustProxy(value) {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (/^\d+$/.test(value)) return Number(value); // number of proxy hops
+  return value; // e.g. 'loopback' or an IP/subnet list
+}

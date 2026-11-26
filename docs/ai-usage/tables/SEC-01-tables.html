@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><title>SEC-01 tables</title>
+<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;margin:24px;max-width:1100px}table{border-collapse:collapse;margin:8px 0 28px}td,th{border:1px solid #000;padding:4px 6px;vertical-align:top;text-align:left}th{font-weight:bold}code{font-family:Consolas,monospace;font-size:10pt}h2{font-size:13pt}</style></head><body>
+<h2>Files changed (SEC-01, owner Ben)</h2>
+<table>
+<tr><th>File</th><th>What changed</th></tr>
+<tr><td>database/migrations/002_login_throttle.sql (new)</td><td>New table gym_v1.login_throttle storing the failed-attempt count, counting-window start and locked_until for each normalised email, including emails with no account, so lockouts survive a server restart.</td></tr>
+<tr><td>server/src/utils/loginThrottle.js (new)</td><td>Lockout logic: getActiveLock (is this email locked?), recordFailure (atomic counter, locks after 5 failures in 15 minutes), clearFailures (reset on successful login).</td></tr>
+<tr><td>server/src/middleware/rateLimit.js (new)</td><td>Per-IP rate limiter (10 requests/minute per endpoint) using express-rate-limit; returns HTTP 429 with Retry-After and writes an audit-log entry.</td></tr>
+<tr><td>server/src/routes/auth.js</td><td>Login now checks the lock first, always runs one bcrypt comparison (dummy hash for unknown emails), counts failures, locks the account and resets the counter on success. Rate limiter added to login, register and forgot-password.</td></tr>
+<tr><td>server/src/index.js</td><td>'trust proxy' changed from 'loopback' to a config setting that is off by default, so a client cannot fake its IP with an X-Forwarded-For header to avoid the rate limit.</td></tr>
+<tr><td>server/src/config.js</td><td>New settings with defaults: LOGIN_MAX_ATTEMPTS=5, LOGIN_WINDOW_MINUTES=15, LOGIN_LOCKOUT_MINUTES=15, AUTH_RATE_LIMIT_PER_MINUTE=10, TRUST_PROXY=off.</td></tr>
+<tr><td>.env.example</td><td>Documents the optional SEC-01 settings (commented out).</td></tr>
+<tr><td>server/package.json, server/package-lock.json</td><td>Added dependency express-rate-limit 8.7.5 (MIT).</td></tr>
+</table>
+
+<h2>AI SECURITY CLAIMS (SEC-01)</h2>
+<table>
+<tr><th>Claim ID</th><th>Criterion</th><th>What the AI says it implemented</th><th>File/line</th><th>How we can test it</th></tr>
+<tr><td>SEC-01-C1</td><td>After 5 failed logins for the same account within 15 minutes, the account is locked for 15 minutes, even with the correct password.</td><td>A failure counter per email stored in the database. The 5th failure sets locked_until = now + 15 min. The lock is checked before the password, so the correct password returns HTTP 423.</td><td>auth.js:89-110; loginThrottle.js:35-67</td><td>T-01b: 5 wrong passwords, then the correct one → 423 "locked for 15 more minutes".</td></tr>
+<tr><td>SEC-01-C2</td><td>Rate limit per IP on login, register and forgot-password (max 10/min); HTTP 429 when exceeded.</td><td>express-rate-limit with a separate counter per endpoint, keyed on the real socket IP (IPv6 grouped by /56). trust proxy is off, so spoofed X-Forwarded-For headers are ignored.</td><td>rateLimit.js:13-31; auth.js:63, 85, 193; index.js:38</td><td>T-01c: 11 logins in a minute with different emails → 11th returns 429. T-01e: repeat with a different fake X-Forwarded-For each time → still 429.</td></tr>
+<tr><td>SEC-01-C3</td><td>Login error message and response time are the same whether or not the email exists.</td><td>One generic message ("Incorrect email or password"). A bcrypt comparison always runs (a dummy hash for unknown emails). Made-up emails are locked out exactly like real ones.</td><td>auth.js:18-21, 97-112</td><td>T-01d: wrong password for a real and a fake email → same 401 message; similar timing (AI measured medians 281 ms vs 275 ms).</td></tr>
+<tr><td>SEC-01-C4</td><td>Lockouts and rate-limit hits are written to the audit log.</td><td>New audit actions auth.account_locked, auth.login_blocked_locked and auth.rate_limited; auth.login_failed now records the failed-attempt count.</td><td>auth.js:92-109; rateLimit.js:26</td><td>After T-01b and T-01c, open Admin → Audit log and find these entries.</td></tr>
+<tr><td>SEC-01-C5</td><td>A successful login resets the failed-attempt counter.</td><td>On a correct password, the email's row in login_throttle is deleted.</td><td>auth.js:115; loginThrottle.js:70-72</td><td>T-01a: 3 wrong passwords, then the correct one, then 4 wrong → account not locked.</td></tr>
+<tr><td>SEC-01-C6</td><td>Lockout state is stored in the database and survives a server restart.</td><td>Lockout data is kept in the gym_v1.login_throttle table, not in memory.</td><td>002_login_throttle.sql</td><td>Lock an account, restart the server, log in with the correct password → still 423.</td></tr>
+</table>
+</body></html>

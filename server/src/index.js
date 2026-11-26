@@ -32,7 +32,10 @@ import adminRoutes from './routes/admin.js';
 const app = express();
 const PgSession = connectPgSimple(session);
 
-app.set('trust proxy', 'loopback');
+// SEC-01: X-Forwarded-For is only trusted when TRUST_PROXY is configured
+// (i.e. a real reverse proxy sets it). Otherwise req.ip is the socket address,
+// so clients cannot spoof their IP to get around the per-IP rate limit.
+app.set('trust proxy', config.trustProxy);
 app.use(morgan('dev'));
 app.use(express.json());
 app.use((req, res, next) => {

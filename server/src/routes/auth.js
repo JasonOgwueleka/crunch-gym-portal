@@ -8,9 +8,25 @@ import { audit } from '../utils/audit.js';
 import { sendEmail } from '../utils/mailer.js';
 import { ACTIVE_MEMBERSHIP_SQL } from '../utils/domain.js';
 import { config } from '../config.js';
+import { authRateLimit } from '../middleware/rateLimit.js';
+import { emailKey, getActiveLock, recordFailure, clearFailures, minutesLeft } from '../utils/loginThrottle.js';
 
 const router = Router();
 const MIN_PASSWORD = 6;
+
+// SEC-01: one generic message for every failed login (unknown email or wrong password).
+const LOGIN_FAILED_MESSAGE = 'Incorrect email or password';
+// SEC-01: bcrypt hash of a random value, cost 10 like real hashes. Used when the
+// email has no account so the response takes the same time as a wrong password.
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 10);
+
+function lockedError(lockedUntil) {
+  const mins = minutesLeft(lockedUntil);
+  return new HttpError(
+    423,
+    `Too many failed login attempts. This account is locked for ${mins} more minute${mins === 1 ? '' : 's'}.`,
+  );
+}
 
 export const publicUser = (u) =>
   u && {
@@ -44,7 +60,7 @@ async function currentUserPayload(userId) {
 }
 
 // Visitor registration: creates a member account and logs them in.
-router.post('/register', async (req, res) => {
+router.post('/register', authRateLimit('register'), async (req, res) => {
   requireFields(req.body, ['email', 'password', 'full_name']);
   const { email, password, full_name, phone, date_of_birth } = req.body;
   if (String(password).length < MIN_PASSWORD) {
@@ -66,14 +82,37 @@ router.post('/register', async (req, res) => {
   res.status(201).json({ user: await currentUserPayload(user.id) });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimit('login'), async (req, res) => {
   requireFields(req.body, ['email', 'password']);
-  const user = await one('select * from gym_v1.users where lower(email) = lower($1)', [String(req.body.email).trim()]);
-  const ok = user && (await bcrypt.compare(String(req.body.password), user.password_hash));
-  if (!ok) {
-    await audit(req, 'auth.login_failed', 'user', user?.id ?? null, { email: req.body.email }, null);
-    throw new HttpError(401, 'Incorrect email or password');
+  const key = emailKey(req.body.email);
+
+  // SEC-01 (1): refuse while locked, even with the correct password. Checked
+  // before the user lookup so locked real and made-up emails behave the same.
+  const activeLock = await getActiveLock(key);
+  if (activeLock) {
+    await audit(req, 'auth.login_blocked_locked', 'login', key, { email: key, locked_until: activeLock }, null);
+    throw lockedError(activeLock);
   }
+
+  const user = await one('select * from gym_v1.users where lower(email) = $1', [key]);
+  // SEC-01 (3): always run one bcrypt comparison so timing doesn't reveal whether the email exists.
+  const passwordOk = await bcrypt.compare(String(req.body.password), user ? user.password_hash : DUMMY_HASH);
+  if (!user || !passwordOk) {
+    const { failedCount, lockedUntil, justLocked } = await recordFailure(key);
+    await audit(req, 'auth.login_failed', 'user', user?.id ?? null, { email: key, failed_count: failedCount }, null);
+    if (justLocked) {
+      await audit(req, 'auth.account_locked', 'login', key, {
+        email: key,
+        locked_until: lockedUntil,
+        after_failed_attempts: failedCount,
+      }, null);
+      throw lockedError(lockedUntil);
+    }
+    throw new HttpError(401, LOGIN_FAILED_MESSAGE);
+  }
+
+  // SEC-01 (5): successful authentication resets the failed-attempt counter.
+  await clearFailures(key);
   if (!user.is_active) throw new HttpError(403, 'This account has been deactivated. Please contact the gym.');
   req.session.userId = user.id;
   await query('update gym_v1.users set last_login_at = now() where id = $1', [user.id]);
@@ -151,7 +190,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authRateLimit('forgot-password'), async (req, res) => {
   requireFields(req.body, ['email']);
   const user = await one('select * from gym_v1.users where lower(email) = lower($1) and is_active', [String(req.body.email).trim()]);
   if (user) {
