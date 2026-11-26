@@ -69,7 +69,12 @@ export function errorHandler(err, req, res, next) {
       reason: err.code,
       field: err.field ?? null,
     });
-    return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File is too large' : 'The upload was rejected' });
+    const message = {
+      LIMIT_FILE_SIZE: 'This file is too large. The maximum size is 5 MB.',
+      LIMIT_FILE_COUNT: 'Upload one file at a time.',
+      LIMIT_UNEXPECTED_FILE: 'Unexpected file field. Upload one file using the form provided.',
+    }[err.code] || 'The upload was rejected.';
+    return res.status(400).json({ error: message, code: 'UPLOAD_REJECTED' });
   }
   switch (err?.code) {
     case '23505':

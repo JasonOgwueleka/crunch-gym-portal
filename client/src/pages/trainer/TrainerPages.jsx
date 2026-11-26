@@ -546,8 +546,8 @@ export function Certifications() {
             fields={[
               ...CERT_FIELDS,
               {
-                name: 'document', label: editing === 'new' ? 'Document (PDF or image)' : 'Replace document (optional)', type: 'file',
-                accept: '.pdf,image/*', required: editing === 'new', wide: true,
+                name: 'document', label: editing === 'new' ? 'Document (PDF, JPG or PNG, max 5 MB)' : 'Replace document (optional; PDF, JPG or PNG, max 5 MB)', type: 'file',
+                accept: '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png', required: editing === 'new', wide: true,
               },
             ]}
             record={editing === 'new' ? null : editing}

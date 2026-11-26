@@ -136,7 +136,7 @@ export default function Progress() {
         <Modal title="Upload progress photo" onClose={() => setUploading(false)}>
           <EntityForm
             fields={[
-              { name: 'photo', label: 'Photo', type: 'file', accept: 'image/*', required: true, wide: true },
+              { name: 'photo', label: 'Photo (JPG or PNG, max 5 MB)', type: 'file', accept: '.jpg,.jpeg,.png,image/jpeg,image/png', required: true, wide: true },
               { name: 'caption', label: 'Caption', type: 'text' },
               { name: 'taken_on', label: 'Taken on', type: 'date' },
             ]}

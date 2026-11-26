@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { badRequest, notFound, forbidden, requireFields, toInt, blankToNull } from '../utils/http.js';
 import { audit } from '../utils/audit.js';
 import { sendEmail } from '../utils/mailer.js';
-import { uploader, UPLOAD_SUBDIRS, removeStoredFile, sendStoredFile } from '../utils/uploads.js';
+import { uploader, verifyUpload, UPLOAD_SUBDIRS, removeStoredFile, sendStoredFile } from '../utils/uploads.js';
 
 const router = Router();
 const upload = uploader(UPLOAD_SUBDIRS.certifications);
@@ -49,7 +49,8 @@ router.get('/:id/file', requireAuth, requireRole('trainer', 'admin'), async (req
   sendStoredFile(res, UPLOAD_SUBDIRS.certifications, cert);
 });
 
-router.post('/', requireRole('trainer'), upload.single('document'), async (req, res) => {
+// SEC-10: verifyUpload checks the real file type (magic bytes) before anything is stored
+router.post('/', requireRole('trainer'), upload.single('document'), verifyUpload(UPLOAD_SUBDIRS.certifications), async (req, res) => {
   requireFields(req.body, ['title']);
   if (!req.file) throw badRequest('Attach the certificate document');
   const b = req.body;
@@ -65,7 +66,7 @@ router.post('/', requireRole('trainer'), upload.single('document'), async (req, 
 });
 
 // Trainer edits details and may replace the document (goes back to pending review)
-router.put('/:id', requireRole('trainer', 'admin'), upload.single('document'), async (req, res) => {
+router.put('/:id', requireRole('trainer', 'admin'), upload.single('document'), verifyUpload(UPLOAD_SUBDIRS.certifications), async (req, res) => {
   const cert = await loadCert(req);
   const b = req.body || {};
   const newFile = req.file;

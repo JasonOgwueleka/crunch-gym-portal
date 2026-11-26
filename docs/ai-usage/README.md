@@ -14,8 +14,8 @@ AI tool: Claude Code (CLI), model Claude Opus 5.5 (`claude-opus-5-5`).
 | 3 | [03-SEC-01.md](03-SEC-01.md) | SEC-01 Brute-force protection | Ben | v1 | `3ddb9ae` | Done |
 | 4 | [04-SEC-05.md](04-SEC-05.md) | SEC-05 Session hardening | Ben | v1 | `565d78d` | Done |
 | 5 | [05-SEC-06.md](05-SEC-06.md) | SEC-06 CSRF protection | Jason | v1 | `ff20229` | Done |
-| 6 | [06-SEC-12.md](06-SEC-12.md) | SEC-12 Tamper-evident audit log | Jason | v1 | (pending) | Awaiting commit |
-| 7 | 07-SEC-10.md | SEC-10 Safe file uploads | Alex | v1 | | Not started |
+| 6 | [06-SEC-12.md](06-SEC-12.md) | SEC-12 Tamper-evident audit log | Jason | v1 | `82a00c6` | Done |
+| 7 | [07-SEC-10.md](07-SEC-10.md) | SEC-10 Safe file uploads | Alex | v1 | (pending) | Awaiting commit |
 | 8 | 08-SEC-11.md | SEC-11 Encrypt health data | Alex | v1 | | Not started |
 
 Other files: `docx-template-prompt.md` (prompt used to generate the Word template).

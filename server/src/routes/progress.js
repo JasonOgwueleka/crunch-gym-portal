@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { badRequest, notFound, forbidden, toInt, buildUpdate, blankToNull } from '../utils/http.js';
 import { audit } from '../utils/audit.js';
 import { assertCanViewMember } from '../utils/domain.js';
-import { uploader, UPLOAD_SUBDIRS, removeStoredFile, sendStoredFile } from '../utils/uploads.js';
+import { uploader, verifyUpload, UPLOAD_SUBDIRS, removeStoredFile, sendStoredFile } from '../utils/uploads.js';
 
 const router = Router();
 const LOG_FIELDS = ['log_date', 'weight_kg', 'body_fat_pct', 'waist_cm', 'notes'];
@@ -86,7 +86,8 @@ router.get('/photos', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-router.post('/photos', requireRole('member'), upload.single('photo'), async (req, res) => {
+// SEC-10: verifyUpload checks the real file type (magic bytes) before anything is stored
+router.post('/photos', requireRole('member'), upload.single('photo'), verifyUpload(UPLOAD_SUBDIRS.progressPhotos), async (req, res) => {
   if (!req.file) throw badRequest('Choose a photo to upload');
   const photo = await one(
     `insert into gym_v1.progress_photos (member_id, stored_name, original_name, mime_type, size_bytes, caption, taken_on)
