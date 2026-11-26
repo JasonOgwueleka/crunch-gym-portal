@@ -8,7 +8,8 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "db:migrate": "node scripts/migrate.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "db:reencrypt-health": "node scripts/reencrypt-health.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

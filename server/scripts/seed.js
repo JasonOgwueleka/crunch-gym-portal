@@ -14,6 +14,15 @@ import bcrypt from 'bcryptjs';
 import { pool, withTransaction } from '../src/db.js';
 import { config } from '../src/config.js';
 import { UPLOAD_SUBDIRS } from '../src/utils/uploads.js';
+import { loadHealthKeys, encryptHealthFields } from '../src/utils/healthCrypto.js';
+
+// SEC-11: seeded health data is encrypted, so the key must be set.
+try {
+  loadHealthKeys();
+} catch (err) {
+  console.error(`Cannot seed: ${err.message}. Set HEALTH_DATA_KEY in .env.local first.`);
+  process.exit(1);
+}
 
 // ---------------------------------------------------------------------------
 // Test accounts (one per role). Visitors are anonymous and need no account.
@@ -495,7 +504,8 @@ async function main() {
     // ---- Health questionnaires -------------------------------------------
     const hqRows = [{
       member_id: mainMember.id, has_heart_condition: false, has_chest_pain: false, has_dizziness: false,
-      has_bone_joint_problem: true, takes_medication: false, medications: null, medical_conditions: null,
+      has_bone_joint_problem: true, takes_medication: true, medications: 'Salbutamol inhaler, as needed (synthetic)',
+      medical_conditions: 'Mild exercise-induced asthma (synthetic)',
       injuries: 'Old left ankle sprain (2021), fully recovered.', is_pregnant: false, smoker: false,
       activity_level: 'moderate', fitness_goals: 'Get stronger, lose 5kg, hike Carrauntoohil.',
       emergency_contact_name: 'Jamie Member', emergency_contact_phone: '+353 87 555 0199', consent: true,
@@ -510,7 +520,8 @@ async function main() {
         emergency_contact_name: `${pick(FIRST)} ${pick(LAST)}`, emergency_contact_phone: `+353 86 ${between(100, 999)} ${between(1000, 9999)}`, consent: true,
       });
     }
-    await insertMany(db, 'health_questionnaires', hqRows);
+    // SEC-11: encrypt the sensitive text fields exactly as the API does.
+    await insertMany(db, 'health_questionnaires', hqRows.map((r) => encryptHealthFields(r, r.member_id)));
 
     // ---- Messages -----------------------------------------------------------
     const convo = [

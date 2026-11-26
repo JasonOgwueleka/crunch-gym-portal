@@ -9,6 +9,7 @@ import { pool } from './db.js';
 import { loadUser } from './middleware/auth.js';
 import { SESSION_COOKIE } from './utils/session.js';
 import { csrfProtection } from './utils/csrf.js';
+import { loadHealthKeys } from './utils/healthCrypto.js';
 import { errorHandler } from './utils/http.js';
 
 import authRoutes from './routes/auth.js';
@@ -30,6 +31,17 @@ import certificationRoutes from './routes/certifications.js';
 import checkinRoutes from './routes/checkins.js';
 import assignmentRoutes from './routes/assignments.js';
 import adminRoutes from './routes/admin.js';
+
+// SEC-11: refuse to start without a valid health-data encryption key.
+try {
+  const { currentId, keyIds } = loadHealthKeys();
+  console.log(`Health data encryption key loaded (current key id: ${currentId}${keyIds.length > 1 ? `, ${keyIds.length - 1} old key(s) for decryption` : ''})`);
+} catch (err) {
+  console.error(`Refusing to start: ${err.message}.`);
+  console.error('Set HEALTH_DATA_KEY in .env.local, e.g. generate one with:');
+  console.error(`  node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`);
+  process.exit(1);
+}
 
 const app = express();
 const PgSession = connectPgSimple(session);

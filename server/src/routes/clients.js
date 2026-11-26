@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query, one } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { notFound, toInt } from '../utils/http.js';
+import { decryptForViewer } from '../utils/healthCrypto.js';
 import { ACTIVE_MEMBERSHIP_SQL, assertTrainerOf } from '../utils/domain.js';
 
 /** Trainer view of the members assigned to them (admins can see any member). */
@@ -53,7 +54,8 @@ router.get('/:memberId', async (req, res) => {
   ]);
   res.json({
     member,
-    health,
+    // SEC-11: decrypted only here, after assertTrainerOf() above has passed
+    health: await decryptForViewer(req, health, { strict: false }),
     progress_logs: logs.rows,
     progress_photos: photos.rows,
     workout_plans: plans.rows,
