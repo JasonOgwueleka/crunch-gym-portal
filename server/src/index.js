@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import { config, PROJECT_ROOT } from './config.js';
 import { pool } from './db.js';
 import { loadUser } from './middleware/auth.js';
+import { SESSION_COOKIE } from './utils/session.js';
 import { errorHandler } from './utils/http.js';
 
 import authRoutes from './routes/auth.js';
@@ -51,15 +52,19 @@ app.use(
       tableName: 'user_sessions',
       createTableIfMissing: false,
     }),
-    name: 'crunch.sid',
+    name: SESSION_COOKIE,
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
     rolling: true,
+    // SEC-05: the idle and absolute timeouts are enforced server-side in loadUser
+    // (middleware/auth.js) from timestamps stored in the session, so a cookie that is
+    // still held by the browser is refused once either limit has passed.
     cookie: {
-      httpOnly: true,
-      sameSite: 'lax',
-      maxAge: config.sessionMaxAgeMs,
+      httpOnly: true, // not readable from JavaScript
+      sameSite: 'strict', // never sent on cross-site requests
+      secure: config.cookieSecure, // HTTPS-only when NODE_ENV=production
+      maxAge: config.sessionAbsoluteMs,
     },
   }),
 );

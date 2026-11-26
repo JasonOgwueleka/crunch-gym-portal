@@ -18,7 +18,7 @@ function AuthCard({ title, children, footer }) {
 }
 
 export function Login() {
-  const { user, login } = useAuth();
+  const { user, login, notice } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [values, bind] = useFormState({ email: '', password: '' });
@@ -40,6 +40,7 @@ export function Login() {
       }
     >
       <form className="form" onSubmit={submit}>
+        {!error && <Alert kind="info">{notice}</Alert>}
         <Alert>{error}</Alert>
         <div className="field">
           <label htmlFor="email">Email</label>

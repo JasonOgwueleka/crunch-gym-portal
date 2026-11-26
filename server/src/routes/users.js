@@ -4,6 +4,7 @@ import { query, one, withTransaction } from '../db.js';
 import { requireRole } from '../middleware/auth.js';
 import { badRequest, notFound, requireFields, toInt, blankToNull } from '../utils/http.js';
 import { audit } from '../utils/audit.js';
+import { destroyAllSessionsForUser } from '../utils/session.js';
 import { ACTIVE_MEMBERSHIP_SQL } from '../utils/domain.js';
 import { publicUser } from './auth.js';
 
@@ -110,6 +111,9 @@ router.put('/:id', async (req, res) => {
   const changes = { ...b };
   if (changes.password) changes.password = '[changed]';
   if (existing.role !== user.role) changes.previous_role = existing.role;
+  // SEC-05 (4): an admin setting a new password counts as a password change,
+  // so all of that user's existing sessions are ended.
+  if (hash) changes.sessions_ended = await destroyAllSessionsForUser(id);
   await audit(req, existing.role !== user.role ? 'user.role_change' : 'user.update', 'user', id, changes);
   res.json(publicUser(user));
 });

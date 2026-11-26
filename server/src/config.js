@@ -34,7 +34,13 @@ export const config = {
   // Each version keeps its own upload folder (uploads/gym_v1) so seeding one
   // version never deletes the files another version's database points to.
   uploadDir: path.resolve(SERVER_ROOT, process.env.UPLOAD_DIR || './uploads', 'gym_v1'),
-  sessionMaxAgeMs: 1000 * 60 * 60 * 8, // 8 hours
+  // SEC-05: session timeouts, enforced on the server for every request.
+  // Idle: no request for this long -> session invalid (default 15 minutes).
+  // Absolute: this long after login -> invalid even if active (default 8 hours = 480 min).
+  sessionIdleMs: positiveInt('SESSION_IDLE_TIMEOUT_MINUTES', 15) * 60 * 1000,
+  sessionAbsoluteMs: positiveInt('SESSION_ABSOLUTE_TIMEOUT_MINUTES', 480) * 60 * 1000,
+  // SEC-05: Secure cookie flag only in production (local dev runs over plain HTTP).
+  cookieSecure: process.env.NODE_ENV === 'production',
 
   // SEC-01: brute-force protection. Defaults match the requirement; the env
   // variables only exist so testers can shorten the waits.

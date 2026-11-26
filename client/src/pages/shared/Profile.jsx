@@ -7,7 +7,7 @@ import EntityForm from '../../components/EntityForm.jsx';
 import { Alert, Card, PageHeader } from '../../components/ui.jsx';
 
 export default function Profile() {
-  const { user, setUser } = useAuth();
+  const { user, setUser, endSession } = useAuth();
   const navigate = useNavigate();
   const [message, setMessage] = useState(null);
   const trainerProfile = useApi(user.role === 'trainer' ? '/trainers/me/profile' : null);
@@ -42,8 +42,9 @@ export default function Profile() {
               { name: 'new_password', label: 'New password', type: 'password', required: true, autoComplete: 'new-password', wide: true },
             ]}
             onSubmit={async (v) => {
-              await api('/auth/change-password', { method: 'POST', body: v });
-              setMessage('Password changed.');
+              // SEC-05: the server ends every session for this user, including this one.
+              const res = await api('/auth/change-password', { method: 'POST', body: v });
+              endSession(res.message || 'Password changed. Please log in again.');
             }}
             submitLabel="Change password"
           />

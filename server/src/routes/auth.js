@@ -9,6 +9,7 @@ import { sendEmail } from '../utils/mailer.js';
 import { ACTIVE_MEMBERSHIP_SQL } from '../utils/domain.js';
 import { config } from '../config.js';
 import { authRateLimit } from '../middleware/rateLimit.js';
+import { startAuthenticatedSession, destroySession, destroyAllSessionsForUser } from '../utils/session.js';
 import { emailKey, getActiveLock, recordFailure, clearFailures, minutesLeft } from '../utils/loginThrottle.js';
 
 const router = Router();
@@ -72,7 +73,8 @@ router.post('/register', authRateLimit('register'), async (req, res) => {
      values ($1, $2, $3, $4, $5, 'member') returning *`,
     [String(email).trim().toLowerCase(), hash, String(full_name).trim(), blankToNull(phone), blankToNull(date_of_birth)],
   );
-  req.session.userId = user.id;
+  // SEC-05: new session ID on login (prevents session fixation)
+  await startAuthenticatedSession(req, user.id);
   await audit(req, 'auth.register', 'user', user.id, { email: user.email }, user);
   sendEmail({
     to: user.email,
@@ -114,7 +116,8 @@ router.post('/login', authRateLimit('login'), async (req, res) => {
   // SEC-01 (5): successful authentication resets the failed-attempt counter.
   await clearFailures(key);
   if (!user.is_active) throw new HttpError(403, 'This account has been deactivated. Please contact the gym.');
-  req.session.userId = user.id;
+  // SEC-05 (1): issue a brand-new session ID on successful login (prevents session fixation)
+  await startAuthenticatedSession(req, user.id);
   await query('update gym_v1.users set last_login_at = now() where id = $1', [user.id]);
   await audit(req, 'auth.login', 'user', user.id, null, user);
   res.json({ user: await currentUserPayload(user.id) });
@@ -122,10 +125,9 @@ router.post('/login', authRateLimit('login'), async (req, res) => {
 
 router.post('/logout', async (req, res) => {
   if (req.user) await audit(req, 'auth.logout', 'user', req.user.id);
-  req.session.destroy(() => {
-    res.clearCookie('crunch.sid');
-    res.json({ ok: true });
-  });
+  // SEC-05 (4): delete the session server-side, not just the cookie
+  await destroySession(req, res);
+  res.json({ ok: true });
 });
 
 router.get('/me', async (req, res) => {
@@ -169,10 +171,9 @@ router.delete('/me', requireAuth, async (req, res) => {
   }
   await audit(req, 'user.delete_self', 'user', user.id, { email: user.email });
   await query('delete from gym_v1.users where id = $1', [user.id]);
-  req.session.destroy(() => {
-    res.clearCookie('crunch.sid');
-    res.json({ ok: true });
-  });
+  await destroyAllSessionsForUser(user.id);
+  await destroySession(req, res);
+  res.json({ ok: true });
 });
 
 router.post('/change-password', requireAuth, async (req, res) => {
@@ -186,8 +187,12 @@ router.post('/change-password', requireAuth, async (req, res) => {
   }
   const hash = await bcrypt.hash(String(req.body.new_password), 10);
   await query('update gym_v1.users set password_hash = $2 where id = $1', [user.id, hash]);
-  await audit(req, 'auth.change_password', 'user', user.id);
-  res.json({ ok: true });
+  // SEC-05 (4): end this session and every other session for the user, so anyone
+  // holding an old session (e.g. a stolen cookie) is logged out too.
+  const ended = await destroyAllSessionsForUser(user.id);
+  await audit(req, 'auth.change_password', 'user', user.id, { sessions_ended: ended });
+  await destroySession(req, res);
+  res.json({ ok: true, loggedOut: true, message: 'Password changed. Please log in again with your new password.' });
 });
 
 router.post('/forgot-password', authRateLimit('forgot-password'), async (req, res) => {
@@ -229,7 +234,11 @@ router.post('/reset-password', async (req, res) => {
     return t.user_id;
   });
   const user = await one('select * from gym_v1.users where id = $1', [userId]);
-  await audit(req, 'auth.password_reset', 'user', userId, null, user);
+  // SEC-05 (4): a password reset ends every session for that user, plus the
+  // session in this browser.
+  const ended = await destroyAllSessionsForUser(userId);
+  await audit(req, 'auth.password_reset', 'user', userId, { sessions_ended: ended }, user);
+  await destroySession(req, res);
   res.json({ ok: true });
 });
 

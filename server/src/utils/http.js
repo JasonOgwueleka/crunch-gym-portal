@@ -1,7 +1,8 @@
 export class HttpError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    if (code) this.code = code; // optional machine-readable reason for the client
   }
 }
 
@@ -48,7 +49,7 @@ export function buildUpdate(body, allowed, startIndex = 1) {
 // eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, next) {
   if (err instanceof HttpError) {
-    return res.status(err.status).json({ error: err.message });
+    return res.status(err.status).json(err.code ? { error: err.message, code: err.code } : { error: err.message });
   }
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File is too large' });
