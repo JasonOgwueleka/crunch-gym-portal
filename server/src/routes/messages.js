@@ -53,8 +53,19 @@ router.get('/thread/:userId', async (req, res) => {
       order by created_at`,
     [req.user.id, other],
   );
-  await query('update gym_v1.messages set read_at = now() where sender_id = $2 and recipient_id = $1 and read_at is null', [req.user.id, other]);
   res.json(rows);
+});
+
+// SEC-06 (4): marking messages as read used to happen inside the GET above.
+// GET requests must never change data, so it is now a separate POST (CSRF-protected).
+router.post('/thread/:userId/read', async (req, res) => {
+  const other = toInt(req.params.userId, 'userId');
+  if (!(await canMessage(req.user, other))) throw forbidden('You can only message your trainer or your clients');
+  const { rowCount } = await query(
+    'update gym_v1.messages set read_at = now() where sender_id = $2 and recipient_id = $1 and read_at is null',
+    [req.user.id, other],
+  );
+  res.json({ marked_read: rowCount });
 });
 
 router.post('/', async (req, res) => {

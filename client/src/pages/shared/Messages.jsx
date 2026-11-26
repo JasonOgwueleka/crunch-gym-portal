@@ -20,6 +20,18 @@ export default function Messages() {
     endRef.current?.scrollIntoView({ block: 'end' });
   }, [thread.data]);
 
+  // SEC-06 (4): opening a thread no longer marks it read on the server as a side
+  // effect of a GET. Mark incoming unread messages as read with an explicit POST.
+  useEffect(() => {
+    if (!activeId || !thread.data) return;
+    const hasUnread = thread.data.some((m) => String(m.sender_id) === String(activeId) && !m.read_at);
+    if (hasUnread) {
+      api(`/messages/thread/${activeId}/read`, { method: 'POST' })
+        .then(() => contacts.reload())
+        .catch(() => {});
+    }
+  }, [activeId, thread.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Poll for new messages while the page is open
   useEffect(() => {
     if (!activeId) return undefined;

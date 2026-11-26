@@ -9,6 +9,7 @@ import { sendEmail } from '../utils/mailer.js';
 import { ACTIVE_MEMBERSHIP_SQL } from '../utils/domain.js';
 import { config } from '../config.js';
 import { authRateLimit } from '../middleware/rateLimit.js';
+import { getOrCreateCsrfToken } from '../utils/csrf.js';
 import { startAuthenticatedSession, destroySession, destroyAllSessionsForUser } from '../utils/session.js';
 import { emailKey, getActiveLock, recordFailure, clearFailures, minutesLeft } from '../utils/loginThrottle.js';
 
@@ -128,6 +129,13 @@ router.post('/logout', async (req, res) => {
   // SEC-05 (4): delete the session server-side, not just the cookie
   await destroySession(req, res);
   res.json({ ok: true });
+});
+
+// SEC-06: hand the session's CSRF token to the React app (same-origin only;
+// CORS is not enabled, so other sites cannot read this response).
+router.get('/csrf-token', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ csrfToken: getOrCreateCsrfToken(req) });
 });
 
 router.get('/me', async (req, res) => {

@@ -8,6 +8,7 @@ import { config, PROJECT_ROOT } from './config.js';
 import { pool } from './db.js';
 import { loadUser } from './middleware/auth.js';
 import { SESSION_COOKIE } from './utils/session.js';
+import { csrfProtection } from './utils/csrf.js';
 import { errorHandler } from './utils/http.js';
 
 import authRoutes from './routes/auth.js';
@@ -70,6 +71,10 @@ app.use(
 );
 
 app.use(loadUser);
+
+// SEC-06: every POST/PUT/PATCH/DELETE under /api needs a valid CSRF token.
+// Runs before all routers (and before multer), so a rejected request does nothing.
+app.use('/api', csrfProtection);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
